@@ -1,16 +1,18 @@
 package main
 
 import (
+	"bufio"
 	"crypto/tls"
 	"flag"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	"math"
 	"net"
 	"os"
 	"runtime/debug"
 	"syscall"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // check exit codes
@@ -24,7 +26,7 @@ const (
 var exitCode = OK
 var lookupTimeout, connectionTimeout, warningValidity, criticalValidity time.Duration
 var warningFlag, criticalFlag uint
-var version string
+var version, hostsFile string
 var printVersion bool
 
 func updateExitCode(newCode int) (changed bool) {
@@ -40,7 +42,6 @@ func main() {
 	defer catchPanic()
 
 	var host string
-	var ips []net.IP
 
 	flag.StringVar(&host, "host", "", "the domain name of the host to check")
 	flag.DurationVar(&lookupTimeout, "lookup-timeout", 10*time.Second, "timeout for DNS lookups - see: https://golang.org/pkg/time/#ParseDuration")
@@ -48,6 +49,7 @@ func main() {
 	flag.UintVar(&warningFlag, "w", 30, "warning validity in days")
 	flag.UintVar(&criticalFlag, "c", 14, "critical validity in days")
 	flag.BoolVar(&printVersion, "V", false, "print version and exit")
+	flag.StringVar(&hostsFile, "hostsfile", "", "filename of the hosts file")
 	flag.Parse()
 
 	log.SetLevel(log.InfoLevel)
@@ -57,7 +59,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	if host == "" {
+	if host == "" && hostsFile == "" {
 		flag.Usage()
 		log.Error("-host is required")
 		os.Exit(Critical)
@@ -70,6 +72,20 @@ func main() {
 	warningValidity = time.Duration(warningFlag) * 24 * time.Hour
 	criticalValidity = time.Duration(criticalFlag) * 24 * time.Hour
 
+	if hostsFile != "" {
+		hosts := getHostNamesFromFile(hostsFile)
+		for _, host := range hosts {
+			checkHost(host)
+		}
+	} else {
+		checkHost(host)
+	}
+
+	os.Exit(exitCode)
+}
+
+func checkHost(host string) {
+	var ips []net.IP
 	ips = lookupIPWithTimeout(host, lookupTimeout)
 	log.Debugf("lookup result: %v", ips)
 
@@ -90,7 +106,7 @@ func main() {
 					}
 				}
 			}
-			log.Errorf("%s: %s", ip, err)
+			log.Errorf("%s: %s %s", host, ip, err)
 			updateExitCode(Critical)
 			continue
 		}
@@ -120,12 +136,12 @@ func main() {
 					certificateStatus = OK
 				}
 				updateExitCode(certificateStatus)
-				logWithSeverity(certificateStatus, "%-15s - %s valid until %s (%s)", ip, cert.Subject.CommonName, cert.NotAfter, formatDuration(remainingValidity))
+				logWithSeverity(certificateStatus, "%s with ip %s - %s valid until %s (%s)", host, ip, cert.Subject.CommonName, cert.NotAfter, formatDuration(remainingValidity))
+				logWithSeverity(OK, "certificate: %s"+string(cert.Raw))
 			}
 		}
 		connection.Close()
 	}
-	os.Exit(exitCode)
 }
 
 func lookupIPWithTimeout(host string, timeout time.Duration) []net.IP {
@@ -135,7 +151,7 @@ func lookupIPWithTimeout(host string, timeout time.Duration) []net.IP {
 	go func() {
 		r, err := net.LookupIP(host)
 		if err != nil {
-			log.Fatal(err)
+			log.Error(err)
 		}
 		ch <- r
 	}()
@@ -199,5 +215,27 @@ func logWithSeverity(severity int, format string, args ...interface{}) {
 		log.Errorf(format, args...)
 	default:
 		log.Panicf("Invalid severity %d", severity)
+	}
+}
+
+func getHostNamesFromFile(hostsFileName string) (hostnames []string) {
+	hostsFile, err := os.Open(hostsFileName)
+	check(err)
+	defer hostsFile.Close()
+
+	var hosts []string
+
+	scanner := bufio.NewScanner(hostsFile)
+	for scanner.Scan() {
+		line := scanner.Text()
+		hosts = append(hosts, line)
+	}
+
+	return hosts
+}
+
+func check(e error) {
+	if e != nil {
+		panic(e)
 	}
 }

@@ -3,18 +3,18 @@
 // This software may be modified and distributed under the terms
 // of the MIT license.  See the LICENSE-MIT file for details.
 //
-// This file is based on parts of logrus and was patched to allow better message formatting in non TTY cases.
+// This file is based on parts of log and was patched to allow better message formatting in non TTY cases.
 
 package main
 
 import (
 	"bytes"
 	"fmt"
-	"github.com/Sirupsen/logrus"
-	"runtime"
 	"sort"
 	"strings"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -33,7 +33,6 @@ var (
 
 func init() {
 	baseTimestamp = time.Now()
-	isTerminal = logrus.IsTerminal()
 }
 
 func miniTS() int {
@@ -66,7 +65,7 @@ type SimpleTextFormatter struct {
 }
 
 // Format will actually format the message
-func (f *SimpleTextFormatter) Format(entry *logrus.Entry) ([]byte, error) {
+func (f *SimpleTextFormatter) Format(entry *log.Entry) ([]byte, error) {
 	var keys = make([]string, 0, len(entry.Data))
 	for k := range entry.Data {
 		keys = append(keys, k)
@@ -78,27 +77,24 @@ func (f *SimpleTextFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 
 	b := &bytes.Buffer{}
 
-	isColorTerminal := isTerminal && (runtime.GOOS != "windows")
-	isColored := (f.ForceColors || isColorTerminal) && !f.DisableColors
-
 	timestampFormat := f.TimestampFormat
 	if timestampFormat == "" {
-		timestampFormat = logrus.DefaultTimestampFormat
+		timestampFormat = time.RFC3339
 	}
-	f.printMessage(b, entry, keys, timestampFormat, isColored)
+	f.printMessage(b, entry, keys, timestampFormat, false)
 
 	b.WriteByte('\n')
 	return b.Bytes(), nil
 }
 
-func (f *SimpleTextFormatter) printMessage(b *bytes.Buffer, entry *logrus.Entry, keys []string, timestampFormat string, colored bool) {
+func (f *SimpleTextFormatter) printMessage(b *bytes.Buffer, entry *log.Entry, keys []string, timestampFormat string, colored bool) {
 	var levelColor int
 	switch entry.Level {
-	case logrus.DebugLevel:
+	case log.DebugLevel:
 		levelColor = gray
-	case logrus.WarnLevel:
+	case log.WarnLevel:
 		levelColor = yellow
-	case logrus.ErrorLevel, logrus.FatalLevel, logrus.PanicLevel:
+	case log.ErrorLevel, log.FatalLevel, log.PanicLevel:
 		levelColor = red
 	default:
 		levelColor = blue
