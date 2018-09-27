@@ -136,7 +136,7 @@ func checkHost(host string) {
 					certificateStatus = OK
 				}
 				updateExitCode(certificateStatus)
-				logWithSeverity(certificateStatus, "%s with ip %s - CN=%s with issuer=%s valid until %s (%s)", host, ip, cert.Subject.CommonName, cert.Issuer, cert.NotAfter, formatDuration(remainingValidity))
+				logWithSeverity(certificateStatus, "%s with ip %s - CN=%s with issuer=%s valid until %s (%s)", host, ip, cert.Subject.CommonName, cert.Issuer.CommonName, cert.NotAfter, formatDuration(remainingValidity))
 			}
 		}
 		connection.Close()
