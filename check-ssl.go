@@ -108,6 +108,27 @@ func checkHost(host string) {
 			}
 			log.Errorf("%s: %s %s", host, ip, err)
 			updateExitCode(Critical)
+
+			// try to connecto again using InsecureSkipVerify to get at least some certificate information
+			connection, err := tls.DialWithDialer(&dialer, "tcp", fmt.Sprintf("[%s]:443", ip), &tls.Config{ServerName: host, InsecureSkipVerify: true})
+			if err == nil {
+				checkedCerts := make(map[string]struct{})
+				for _, cert := range connection.ConnectionState().PeerCertificates {
+					if _, checked := checkedCerts[string(cert.Signature)]; checked {
+						continue
+					}
+					checkedCerts[string(cert.Signature)] = struct{}{}
+					// filter out CA certificates
+					if cert.IsCA {
+						log.Debugf("%-15s - ignoring CA certificate %s", ip, cert.Subject.CommonName)
+						continue
+					}
+					remainingValidity := cert.NotAfter.Sub(time.Now())
+					logWithSeverity(Critical, "%s: %s - CN=%s with issuer=\"%s\" is valid until %s (%s)", host, ip, cert.Subject.CommonName, cert.Issuer.CommonName, cert.NotAfter, formatDuration(remainingValidity))
+
+				}
+			}
+
 			continue
 		}
 		// rembember the checked certs based on their Signature
@@ -136,7 +157,7 @@ func checkHost(host string) {
 					certificateStatus = OK
 				}
 				updateExitCode(certificateStatus)
-				logWithSeverity(certificateStatus, "%s with ip %s - CN=%s with issuer=%s valid until %s (%s)", host, ip, cert.Subject.CommonName, cert.Issuer.CommonName, cert.NotAfter, formatDuration(remainingValidity))
+				logWithSeverity(certificateStatus, "%s: %s - CN=%s with issuer=\"%s\" is valid until %s (%s)", host, ip, cert.Subject.CommonName, cert.Issuer.CommonName, cert.NotAfter, formatDuration(remainingValidity))
 			}
 		}
 		connection.Close()
