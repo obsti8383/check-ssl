@@ -56,7 +56,9 @@ func main() {
 
 	logFile, _ := os.Create("check-ssl.log")
 	defer logFile.Close()
-	log.SetOutput(bufio.NewWriter(logFile))
+	logWriter := bufio.NewWriter(logFile)
+	log.SetOutput(logWriter)
+	defer logWriter.Flush()
 	log.SetLevel(log.InfoLevel)
 	log.SetFormatter(&SimpleTextFormatter{DisableTimestamp: true})
 	if printVersion {

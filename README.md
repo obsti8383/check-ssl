@@ -20,15 +20,8 @@ It will handle both IPv4 and IPv6. Missing IPv6 connectivity will be reported in
 
 ## Example
 
-    $ check-ssl -host analytics.wywy.com
-    INFO 52.222.157.227  - *.wywy.com valid until 2018-11-16 23:59:59 +0000 UTC (654d 23h 56m 59s) 
-    INFO 52.222.157.169  - *.wywy.com valid until 2018-11-16 23:59:59 +0000 UTC (654d 23h 56m 59s) 
-    INFO 52.222.157.182  - *.wywy.com valid until 2018-11-16 23:59:59 +0000 UTC (654d 23h 56m 59s) 
-    INFO 52.222.157.140  - *.wywy.com valid until 2018-11-16 23:59:59 +0000 UTC (654d 23h 56m 59s) 
-    INFO 52.222.157.73   - *.wywy.com valid until 2018-11-16 23:59:59 +0000 UTC (654d 23h 56m 59s) 
-    INFO 52.222.157.18   - *.wywy.com valid until 2018-11-16 23:59:59 +0000 UTC (654d 23h 56m 59s) 
-    INFO 52.222.157.90   - *.wywy.com valid until 2018-11-16 23:59:59 +0000 UTC (654d 23h 56m 58s) 
-    INFO 52.222.157.121  - *.wywy.com valid until 2018-11-16 23:59:59 +0000 UTC (654d 23h 56m 58s)
+    $ ./check-ssl -hostsfile hostsfile.txt >certificates.csv
+
  
 ## Usage
 
