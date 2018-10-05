@@ -3,12 +3,14 @@ package main
 import (
 	"bufio"
 	"crypto/tls"
+	"crypto/x509"
 	"flag"
 	"fmt"
 	"math"
 	"net"
 	"os"
 	"runtime/debug"
+	"strings"
 	"syscall"
 	"time"
 
@@ -52,6 +54,9 @@ func main() {
 	flag.StringVar(&hostsFile, "hostsfile", "", "filename of the hosts file")
 	flag.Parse()
 
+	logFile, _ := os.Create("check-ssl.log")
+	defer logFile.Close()
+	log.SetOutput(bufio.NewWriter(logFile))
 	log.SetLevel(log.InfoLevel)
 	log.SetFormatter(&SimpleTextFormatter{DisableTimestamp: true})
 	if printVersion {
@@ -71,6 +76,8 @@ func main() {
 
 	warningValidity = time.Duration(warningFlag) * 24 * time.Hour
 	criticalValidity = time.Duration(criticalFlag) * 24 * time.Hour
+
+	printHeader()
 
 	if hostsFile != "" {
 		hosts := getHostNamesFromFile(hostsFile)
@@ -109,7 +116,7 @@ func checkHost(host string) {
 			log.Errorf("%s: %s %s", host, ip, err)
 			updateExitCode(Critical)
 
-			// try to connecto again using InsecureSkipVerify to get at least some certificate information
+			// try to connect again using InsecureSkipVerify to get at least some certificate information
 			connection, err := tls.DialWithDialer(&dialer, "tcp", fmt.Sprintf("[%s]:443", ip), &tls.Config{ServerName: host, InsecureSkipVerify: true})
 			if err == nil {
 				checkedCerts := make(map[string]struct{})
@@ -125,7 +132,7 @@ func checkHost(host string) {
 					}
 					remainingValidity := cert.NotAfter.Sub(time.Now())
 					logWithSeverity(Critical, "%s: %s - CN=%s with issuer=\"%s\" is valid until %s (%s)", host, ip, cert.Subject.CommonName, cert.Issuer.CommonName, cert.NotAfter, formatDuration(remainingValidity))
-
+					printCert(host, ip, cert, formatDuration(remainingValidity))
 				}
 			}
 
@@ -158,6 +165,7 @@ func checkHost(host string) {
 				}
 				updateExitCode(certificateStatus)
 				logWithSeverity(certificateStatus, "%s: %s - CN=%s with issuer=\"%s\" is valid until %s (%s)", host, ip, cert.Subject.CommonName, cert.Issuer.CommonName, cert.NotAfter, formatDuration(remainingValidity))
+				printCert(host, ip, cert, formatDuration(remainingValidity))
 			}
 		}
 		connection.Close()
@@ -248,6 +256,7 @@ func getHostNamesFromFile(hostsFileName string) (hostnames []string) {
 	scanner := bufio.NewScanner(hostsFile)
 	for scanner.Scan() {
 		line := scanner.Text()
+		line = strings.TrimPrefix(line, "https://")
 		hosts = append(hosts, line)
 	}
 
@@ -258,4 +267,12 @@ func check(e error) {
 	if e != nil {
 		panic(e)
 	}
+}
+
+func printCert(host string, ip net.IP, cert *x509.Certificate, formattedDuration string) {
+	fmt.Printf("%s;%s;%s;\"%s\";%s;%s;%s;%s;%s\n", host, ip.String(), cert.SerialNumber, cert.Issuer.CommonName, cert.Subject.CommonName, cert.DNSNames, cert.NotBefore.String(), cert.NotAfter.String(), formattedDuration)
+}
+
+func printHeader() {
+	fmt.Printf("Host;IP;Serial Number;Issuer Common Name;Subject Common Name;DNS Names;Valid from;Valid till;Validity duration period\n")
 }
